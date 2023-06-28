@@ -60,7 +60,7 @@ func NewAdditionalPropertiesItem(in *yaml.Node, context *compiler.Context) (*Add
 		// since the oneof matched one of its possibilities, discard any matching errors
 		errors = make([]error, 0)
 	} else {
-		message := fmt.Sprintf("contains an invalid AdditionalPropertiesItem")
+		message := "contains an invalid AdditionalPropertiesItem"
 		err := compiler.NewError(context, message)
 		errors = []error{err}
 	}
@@ -2543,7 +2543,7 @@ func NewNonBodyParameter(in *yaml.Node, context *compiler.Context) (*NonBodyPara
 		// since the oneof matched one of its possibilities, discard any matching errors
 		errors = make([]error, 0)
 	} else {
-		message := fmt.Sprintf("contains an invalid NonBodyParameter")
+		message := "contains an invalid NonBodyParameter"
 		err := compiler.NewError(context, message)
 		errors = []error{err}
 	}
@@ -3271,7 +3271,7 @@ func NewParameter(in *yaml.Node, context *compiler.Context) (*Parameter, error) 
 		// since the oneof matched one of its possibilities, discard any matching errors
 		errors = make([]error, 0)
 	} else {
-		message := fmt.Sprintf("contains an invalid Parameter")
+		message := "contains an invalid Parameter"
 		err := compiler.NewError(context, message)
 		errors = []error{err}
 	}
@@ -3345,7 +3345,7 @@ func NewParametersItem(in *yaml.Node, context *compiler.Context) (*ParametersIte
 		// since the oneof matched one of its possibilities, discard any matching errors
 		errors = make([]error, 0)
 	} else {
-		message := fmt.Sprintf("contains an invalid ParametersItem")
+		message := "contains an invalid ParametersItem"
 		err := compiler.NewError(context, message)
 		errors = []error{err}
 	}
@@ -4561,7 +4561,7 @@ func NewResponseValue(in *yaml.Node, context *compiler.Context) (*ResponseValue,
 		// since the oneof matched one of its possibilities, discard any matching errors
 		errors = make([]error, 0)
 	} else {
-		message := fmt.Sprintf("contains an invalid ResponseValue")
+		message := "contains an invalid ResponseValue"
 		err := compiler.NewError(context, message)
 		errors = []error{err}
 	}
@@ -5030,7 +5030,7 @@ func NewSchemaItem(in *yaml.Node, context *compiler.Context) (*SchemaItem, error
 		// since the oneof matched one of its possibilities, discard any matching errors
 		errors = make([]error, 0)
 	} else {
-		message := fmt.Sprintf("contains an invalid SchemaItem")
+		message := "contains an invalid SchemaItem"
 		err := compiler.NewError(context, message)
 		errors = []error{err}
 	}
@@ -5160,7 +5160,7 @@ func NewSecurityDefinitionsItem(in *yaml.Node, context *compiler.Context) (*Secu
 		// since the oneof matched one of its possibilities, discard any matching errors
 		errors = make([]error, 0)
 	} else {
-		message := fmt.Sprintf("contains an invalid SecurityDefinitionsItem")
+		message := "contains an invalid SecurityDefinitionsItem"
 		err := compiler.NewError(context, message)
 		errors = []error{err}
 	}
