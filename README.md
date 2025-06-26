@@ -21,7 +21,7 @@ builds, we request that dependent projects always refer to tagged releases of
 
 ## Copyright
 
-Copyright 2017-2024, Google LLC.
+Copyright 2017-2025, Google LLC.
 
 ## License
 
