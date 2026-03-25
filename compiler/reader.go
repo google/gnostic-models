@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -145,6 +146,58 @@ func FetchFile(fileurl string) ([]byte, error) {
 	return fetchFile(fileurl)
 }
 
+// privateIPRanges lists IP ranges that must not be fetched by gnostic to
+// prevent Server-Side Request Forgery (SSRF) against cloud metadata services,
+// internal networks, and loopback addresses.
+var privateIPRanges = func() []net.IPNet {
+	cidrs := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"127.0.0.0/8",
+		"169.254.0.0/16", // link-local, includes cloud instance metadata (169.254.169.254)
+		"100.64.0.0/10",  // shared address space (RFC 6598)
+		"0.0.0.0/8",
+		"::1/128",        // IPv6 loopback
+		"fc00::/7",       // IPv6 unique local
+		"fe80::/10",      // IPv6 link-local
+	}
+	nets := make([]net.IPNet, 0, len(cidrs))
+	for _, cidr := range cidrs {
+		_, n, err := net.ParseCIDR(cidr)
+		if err != nil {
+			panic(fmt.Sprintf("invalid CIDR %q: %v", cidr, err))
+		}
+		nets = append(nets, *n)
+	}
+	return nets
+}()
+
+// validateFetchURL returns an error if rawURL is not safe to fetch.
+// It enforces an http/https scheme allowlist and blocks requests to
+// private, loopback, and link-local IP addresses to prevent SSRF.
+func validateFetchURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL %q: %v", rawURL, err)
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https":
+		// allowed
+	default:
+		return fmt.Errorf("URL scheme %q is not allowed in $ref; only http and https are permitted", u.Scheme)
+	}
+	host := u.Hostname()
+	if ip := net.ParseIP(host); ip != nil {
+		for _, r := range privateIPRanges {
+			if r.Contains(ip) {
+				return fmt.Errorf("URL %q targets a private or reserved IP address and cannot be fetched", rawURL)
+			}
+		}
+	}
+	return nil
+}
+
 func fetchFile(fileurl string) ([]byte, error) {
 	var bytes []byte
 	initializeFileCache()
@@ -159,6 +212,9 @@ func fetchFile(fileurl string) ([]byte, error) {
 		if verboseReader {
 			log.Printf("Fetching %s", fileurl)
 		}
+	}
+	if err := validateFetchURL(fileurl); err != nil {
+		return nil, err
 	}
 	response, err := http.Get(fileurl)
 	if err != nil {
