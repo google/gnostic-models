@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -145,6 +146,30 @@ func FetchFile(fileurl string) ([]byte, error) {
 	return fetchFile(fileurl)
 }
 
+// validateRemoteURL returns an error if the URL is not safe to fetch.
+// It rejects non-HTTP(S) schemes and IP literals that resolve to private,
+// loopback, or link-local ranges (e.g. cloud instance-metadata endpoints
+// such as 169.254.169.254) to prevent SSRF via malicious $ref values.
+func validateRemoteURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("parsing remote URL %q: %w", rawURL, err)
+	}
+	switch u.Scheme {
+	case "https", "http":
+		// allowed
+	default:
+		return fmt.Errorf("remote $ref URL scheme %q not allowed; must be http or https", u.Scheme)
+	}
+	host := u.Hostname()
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsPrivate() || ip.IsUnspecified() {
+			return fmt.Errorf("remote $ref URL host %q is a private or link-local address", host)
+		}
+	}
+	return nil
+}
+
 func fetchFile(fileurl string) ([]byte, error) {
 	var bytes []byte
 	initializeFileCache()
@@ -159,6 +184,9 @@ func fetchFile(fileurl string) ([]byte, error) {
 		if verboseReader {
 			log.Printf("Fetching %s", fileurl)
 		}
+	}
+	if err := validateRemoteURL(fileurl); err != nil {
+		return nil, err
 	}
 	response, err := http.Get(fileurl)
 	if err != nil {
