@@ -188,7 +188,15 @@ func fetchFile(fileurl string) ([]byte, error) {
 	if err := validateRemoteURL(fileurl); err != nil {
 		return nil, err
 	}
-	response, err := http.Get(fileurl)
+	// Use a custom client that validates every redirect destination.
+	// http.Get follows redirects by default; a redirect from a public URL to a
+	// private address (e.g. 169.254.169.254) would bypass the check above.
+	safeClient := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return validateRemoteURL(req.URL.String())
+		},
+	}
+	response, err := safeClient.Get(fileurl)
 	if err != nil {
 		return nil, err
 	}
