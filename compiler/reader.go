@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -145,6 +146,30 @@ func FetchFile(fileurl string) ([]byte, error) {
 	return fetchFile(fileurl)
 }
 
+// validateRemoteURL returns an error if the URL is not safe to fetch.
+// It rejects non-HTTP(S) schemes and IP literals that resolve to private,
+// loopback, or link-local ranges (e.g. cloud instance-metadata endpoints
+// such as 169.254.169.254) to prevent SSRF via malicious $ref values.
+func validateRemoteURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("parsing remote URL %q: %w", rawURL, err)
+	}
+	switch u.Scheme {
+	case "https", "http":
+		// allowed
+	default:
+		return fmt.Errorf("remote $ref URL scheme %q not allowed; must be http or https", u.Scheme)
+	}
+	host := u.Hostname()
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsPrivate() || ip.IsUnspecified() {
+			return fmt.Errorf("remote $ref URL host %q is a private or link-local address", host)
+		}
+	}
+	return nil
+}
+
 func fetchFile(fileurl string) ([]byte, error) {
 	var bytes []byte
 	initializeFileCache()
@@ -160,7 +185,18 @@ func fetchFile(fileurl string) ([]byte, error) {
 			log.Printf("Fetching %s", fileurl)
 		}
 	}
-	response, err := http.Get(fileurl)
+	if err := validateRemoteURL(fileurl); err != nil {
+		return nil, err
+	}
+	// Use a custom client that validates every redirect destination.
+	// http.Get follows redirects by default; a redirect from a public URL to a
+	// private address (e.g. 169.254.169.254) would bypass the check above.
+	safeClient := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return validateRemoteURL(req.URL.String())
+		},
+	}
+	response, err := safeClient.Get(fileurl)
 	if err != nil {
 		return nil, err
 	}
@@ -257,9 +293,21 @@ func ReadInfoForRef(basefile string, ref string) (*yaml.Node, error) {
 	var filename string
 	if parts[0] != "" {
 		filename = parts[0]
-		if _, err := url.ParseRequestURI(parts[0]); err != nil {
-			// It is not an URL, so the file is local
-			filename = basedir + parts[0]
+		u, parseErr := url.Parse(parts[0])
+		if parseErr != nil || u.Scheme == "" {
+			// It is not a remote URL, so the file is local.
+			// Resolve relative to basedir, then verify it stays within basedir.
+			filename = filepath.Join(basedir, parts[0])
+			cleanedFile := filepath.Clean(filename)
+			cleanedBase := filepath.Clean(basedir)
+			if cleanedBase != "" && cleanedBase != "." && !strings.HasPrefix(cleanedFile, cleanedBase+string(filepath.Separator)) && cleanedFile != cleanedBase {
+				infoCache[ref] = nil
+				return nil, NewError(nil, fmt.Sprintf("$ref %q escapes the base directory", ref))
+			}
+		} else if u.Scheme != "http" && u.Scheme != "https" {
+			// Only http and https remote schemes are allowed.
+			infoCache[ref] = nil
+			return nil, NewError(nil, fmt.Sprintf("$ref %q uses disallowed scheme %q", ref, u.Scheme))
 		}
 	} else {
 		filename = basefile

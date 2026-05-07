@@ -6574,18 +6574,25 @@ func (m *Responses) ResolveReferences(root string) (*yaml.Node, error) {
 func (m *Schema) ResolveReferences(root string) (*yaml.Node, error) {
 	errors := make([]error, 0)
 	if m.XRef != "" {
-		info, err := compiler.ReadInfoForRef(root, m.XRef)
-		if err != nil {
-			return nil, err
-		}
-		if info != nil {
-			replacement, err := NewSchema(info, nil)
-			if err == nil {
-				*m = *replacement
-				return m.ResolveReferences(root)
+		visited := make(map[string]bool)
+		for m.XRef != "" {
+			if visited[m.XRef] {
+				return nil, fmt.Errorf("circular reference detected: %s", m.XRef)
 			}
+			visited[m.XRef] = true
+			info, err := compiler.ReadInfoForRef(root, m.XRef)
+			if err != nil {
+				return nil, err
+			}
+			if info == nil {
+				return nil, nil
+			}
+			replacement, err := NewSchema(info, nil)
+			if err != nil {
+				return info, nil
+			}
+			*m = *replacement
 		}
-		return info, nil
 	}
 	if m.Default != nil {
 		_, err := m.Default.ResolveReferences(root)
