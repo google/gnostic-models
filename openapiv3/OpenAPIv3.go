@@ -6201,22 +6201,28 @@ func (m *Properties) ResolveReferences(root string) (*yaml.Node, error) {
 
 // ResolveReferences resolves references found inside Reference objects.
 func (m *Reference) ResolveReferences(root string) (*yaml.Node, error) {
-	errors := make([]error, 0)
 	if m.XRef != "" {
-		info, err := compiler.ReadInfoForRef(root, m.XRef)
-		if err != nil {
-			return nil, err
-		}
-		if info != nil {
-			replacement, err := NewReference(info, nil)
-			if err == nil {
-				*m = *replacement
-				return m.ResolveReferences(root)
+		visited := make(map[string]bool)
+		for m.XRef != "" {
+			if visited[m.XRef] {
+				return nil, fmt.Errorf("circular reference detected: %s", m.XRef)
 			}
+			visited[m.XRef] = true
+			info, err := compiler.ReadInfoForRef(root, m.XRef)
+			if err != nil {
+				return nil, err
+			}
+			if info == nil {
+				return nil, nil
+			}
+			replacement, err := NewReference(info, nil)
+			if err != nil {
+				return info, nil
+			}
+			*m = *replacement
 		}
-		return info, nil
 	}
-	return nil, compiler.NewErrorGroupOrNil(errors)
+	return nil, nil
 }
 
 // ResolveReferences resolves references found inside RequestBodiesOrReferences objects.

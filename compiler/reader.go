@@ -293,9 +293,21 @@ func ReadInfoForRef(basefile string, ref string) (*yaml.Node, error) {
 	var filename string
 	if parts[0] != "" {
 		filename = parts[0]
-		if _, err := url.ParseRequestURI(parts[0]); err != nil {
-			// It is not an URL, so the file is local
-			filename = basedir + parts[0]
+		u, parseErr := url.Parse(parts[0])
+		if parseErr != nil || u.Scheme == "" {
+			// It is not a remote URL, so the file is local.
+			// Resolve relative to basedir, then verify it stays within basedir.
+			filename = filepath.Join(basedir, parts[0])
+			cleanedFile := filepath.Clean(filename)
+			cleanedBase := filepath.Clean(basedir)
+			if cleanedBase != "" && cleanedBase != "." && !strings.HasPrefix(cleanedFile, cleanedBase+string(filepath.Separator)) && cleanedFile != cleanedBase {
+				infoCache[ref] = nil
+				return nil, NewError(nil, fmt.Sprintf("$ref %q escapes the base directory", ref))
+			}
+		} else if u.Scheme != "http" && u.Scheme != "https" {
+			// Only http and https remote schemes are allowed.
+			infoCache[ref] = nil
+			return nil, NewError(nil, fmt.Sprintf("$ref %q uses disallowed scheme %q", ref, u.Scheme))
 		}
 	} else {
 		filename = basefile

@@ -15,8 +15,11 @@
 package compiler
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -135,5 +138,107 @@ func TestFetchFileValidPublicURLAllowed(t *testing.T) {
 	// The error must be our SSRF guard, not an unexpected network failure.
 	if !strings.Contains(err.Error(), "private or link-local") {
 		t.Errorf("unexpected error fetching from httptest server: %v", err)
+	}
+}
+
+// TestReadInfoForRefPathTraversal verifies that $ref values containing path
+// traversal sequences (e.g. "../../../etc/passwd") are rejected when the
+// resulting path escapes the base directory of the spec file.
+func TestReadInfoForRefPathTraversal(t *testing.T) {
+	// Create a temporary directory with a minimal spec file.
+	dir := t.TempDir()
+	specFile := filepath.Join(dir, "spec.yaml")
+	specContent := `swagger: "2.0"
+info:
+  title: Test
+  version: "1.0"
+paths: {}
+`
+	if err := os.WriteFile(specFile, []byte(specContent), 0644); err != nil {
+		t.Fatalf("writing spec file: %v", err)
+	}
+
+	// Create a sibling file one level up from the basedir to serve as an
+	// escape target. We don't need it to exist because the path-traversal
+	// guard fires before the file read.
+	traversals := []string{
+		"../escape.yaml",
+		"../../etc/passwd",
+		"../../../etc/shadow",
+	}
+
+	for _, ref := range traversals {
+		t.Run(fmt.Sprintf("ref=%s", ref), func(t *testing.T) {
+			ClearCaches()
+			_, err := ReadInfoForRef(specFile, ref)
+			if err == nil {
+				t.Errorf("ReadInfoForRef(%q, %q) should have failed with path-traversal error but succeeded", specFile, ref)
+				return
+			}
+			if !strings.Contains(err.Error(), "escapes") {
+				t.Errorf("ReadInfoForRef(%q, %q) error %q does not mention 'escapes'", specFile, ref, err.Error())
+			}
+		})
+	}
+}
+
+// TestReadInfoForRefDisallowedScheme verifies that $ref values with non-http(s)
+// schemes (e.g. "file://", "ftp://") are rejected.
+func TestReadInfoForRefDisallowedScheme(t *testing.T) {
+	dir := t.TempDir()
+	specFile := filepath.Join(dir, "spec.yaml")
+	if err := os.WriteFile(specFile, []byte("swagger: '2.0'\ninfo:\n  title: t\n  version: '1'\npaths: {}\n"), 0644); err != nil {
+		t.Fatalf("writing spec file: %v", err)
+	}
+
+	disallowed := []string{
+		"file:///etc/passwd",
+		"ftp://example.com/spec.yaml",
+	}
+	for _, ref := range disallowed {
+		t.Run(ref, func(t *testing.T) {
+			ClearCaches()
+			_, err := ReadInfoForRef(specFile, ref)
+			if err == nil {
+				t.Errorf("ReadInfoForRef with ref %q should have been rejected but was not", ref)
+				return
+			}
+			if !strings.Contains(err.Error(), "disallowed") && !strings.Contains(err.Error(), "not allowed") {
+				t.Errorf("ReadInfoForRef(%q) error %q does not mention disallowed scheme", ref, err.Error())
+			}
+		})
+	}
+}
+
+// TestReadInfoForRefSameDir verifies that $ref values pointing to files
+// within the same directory as the base spec are allowed.
+func TestReadInfoForRefSameDir(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write a "main" spec file and a sibling schema file.
+	mainSpec := filepath.Join(dir, "main.yaml")
+	siblingSpec := filepath.Join(dir, "sibling.yaml")
+
+	siblingContent := `swagger: "2.0"
+info:
+  title: Sibling
+  version: "1.0"
+paths: {}
+definitions:
+  MyType:
+    type: string
+`
+	if err := os.WriteFile(mainSpec, []byte("swagger: '2.0'\ninfo:\n  title: m\n  version: '1'\npaths: {}\n"), 0644); err != nil {
+		t.Fatalf("writing main spec: %v", err)
+	}
+	if err := os.WriteFile(siblingSpec, []byte(siblingContent), 0644); err != nil {
+		t.Fatalf("writing sibling spec: %v", err)
+	}
+
+	ClearCaches()
+	// Reference sibling.yaml#/definitions/MyType from main.yaml
+	_, err := ReadInfoForRef(mainSpec, "sibling.yaml#/definitions/MyType")
+	if err != nil {
+		t.Errorf("ReadInfoForRef for same-directory file should succeed, got: %v", err)
 	}
 }
