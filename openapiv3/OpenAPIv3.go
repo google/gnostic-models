@@ -8561,6 +8561,10 @@ func (m *Strings) ToRawInfo() *yaml.Node {
 		return info
 	}
 	// &{Name:additionalProperties Type:NamedString StringEnumValues:[] MapType:string Repeated:true Pattern: Implicit:true Description:}
+	for _, b := range m.AdditionalProperties {
+		info.Content = append(info.Content, compiler.NewScalarNodeForString(b.Name))
+		info.Content = append(info.Content, compiler.NewScalarNodeForString(b.Value))
+	}
 	return info
 }
 
