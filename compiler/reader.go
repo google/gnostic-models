@@ -184,8 +184,8 @@ func ReadBytesForFile(filename string) ([]byte, error) {
 
 func readBytesForFile(filename string) ([]byte, error) {
 	// is the filename a url?
-	fileurl, _ := url.Parse(filename)
-	if fileurl.Scheme != "" {
+	fileurl, err := url.Parse(filename)
+	if err == nil && fileurl.Scheme != "" {
 		// yes, fetch it
 		bytes, err := fetchFile(filename)
 		if err != nil {
@@ -283,18 +283,20 @@ func ReadInfoForRef(basefile string, ref string) (*yaml.Node, error) {
 			for i, key := range path {
 				if i > 0 {
 					m := info
-					if true {
-						found := false
+					found := false
+					if m != nil && m.Kind == yaml.MappingNode {
 						for i := 0; i < len(m.Content); i += 2 {
 							if m.Content[i].Value == key {
 								info = m.Content[i+1]
 								found = true
 							}
 						}
-						if !found {
+					}
+					if !found {
+						if infoCacheEnable {
 							infoCache[ref] = nil
-							return nil, NewError(nil, fmt.Sprintf("could not resolve %s", ref))
 						}
+						return nil, NewError(nil, fmt.Sprintf("could not resolve %s", ref))
 					}
 				}
 			}

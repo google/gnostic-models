@@ -29,6 +29,9 @@ func ParseDocument(b []byte) (*Document, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(info.Content) == 0 {
+		return nil, compiler.NewError(nil, "document has no content")
+	}
 	root := info.Content[0]
 	return NewDocument(root, compiler.NewContext("$root", root, nil))
 }
