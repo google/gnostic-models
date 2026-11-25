@@ -29,7 +29,13 @@ import (
 
 // UnpackMap gets a *yaml.Node if possible.
 func UnpackMap(in *yaml.Node) (*yaml.Node, bool) {
-	if in == nil {
+	if in != nil && in.Kind == yaml.DocumentNode {
+		if len(in.Content) == 0 {
+			return nil, false
+		}
+		return UnpackMap(in.Content[0])
+	}
+	if in == nil || in.Kind == yaml.SequenceNode {
 		return nil, false
 	}
 	return in, true

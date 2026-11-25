@@ -1864,9 +1864,13 @@ func (m *NamedResource) ResolveReferences(root string) (*yaml.Node, error) {
 
 // ResolveReferences resolves references found inside NamedSchema objects.
 func (m *NamedSchema) ResolveReferences(root string) (*yaml.Node, error) {
+	return m.resolveReferences(root, newRefState())
+}
+
+func (m *NamedSchema) resolveReferences(root string, state *refState) (*yaml.Node, error) {
 	errors := make([]error, 0)
 	if m.Value != nil {
-		_, err := m.Value.ResolveReferences(root)
+		_, err := m.Value.resolveReferences(root, state)
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -1900,8 +1904,22 @@ func (m *Oauth2) ResolveReferences(root string) (*yaml.Node, error) {
 
 // ResolveReferences resolves references found inside Parameter objects.
 func (m *Parameter) ResolveReferences(root string) (*yaml.Node, error) {
+	return m.resolveReferences(root, newRefState())
+}
+
+func (m *Parameter) resolveReferences(root string, state *refState) (*yaml.Node, error) {
 	errors := make([]error, 0)
 	if m.XRef != "" {
+		ref := m.XRef
+		if state.seen[ref] {
+			return nil, compiler.NewError(nil, fmt.Sprintf("circular $ref: %s", ref))
+		}
+		state.count++
+		if state.count > maxRefExpansions {
+			return nil, compiler.NewError(nil, fmt.Sprintf("exceeded maximum $ref expansions (%d) at %s", maxRefExpansions, ref))
+		}
+		state.seen[ref] = true
+		defer delete(state.seen, ref)
 		info, err := compiler.ReadInfoForRef(root, m.XRef)
 		if err != nil {
 			return nil, err
@@ -1910,25 +1928,25 @@ func (m *Parameter) ResolveReferences(root string) (*yaml.Node, error) {
 			replacement, err := NewParameter(info, nil)
 			if err == nil {
 				*m = *replacement
-				return m.ResolveReferences(root)
+				return m.resolveReferences(root, state)
 			}
 		}
 		return info, nil
 	}
 	if m.Properties != nil {
-		_, err := m.Properties.ResolveReferences(root)
+		_, err := m.Properties.resolveReferences(root, state)
 		if err != nil {
 			errors = append(errors, err)
 		}
 	}
 	if m.AdditionalProperties != nil {
-		_, err := m.AdditionalProperties.ResolveReferences(root)
+		_, err := m.AdditionalProperties.resolveReferences(root, state)
 		if err != nil {
 			errors = append(errors, err)
 		}
 	}
 	if m.Items != nil {
-		_, err := m.Items.ResolveReferences(root)
+		_, err := m.Items.resolveReferences(root, state)
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -1976,8 +1994,22 @@ func (m *Protocols) ResolveReferences(root string) (*yaml.Node, error) {
 
 // ResolveReferences resolves references found inside Request objects.
 func (m *Request) ResolveReferences(root string) (*yaml.Node, error) {
+	return m.resolveReferences(root, newRefState())
+}
+
+func (m *Request) resolveReferences(root string, state *refState) (*yaml.Node, error) {
 	errors := make([]error, 0)
 	if m.XRef != "" {
+		ref := m.XRef
+		if state.seen[ref] {
+			return nil, compiler.NewError(nil, fmt.Sprintf("circular $ref: %s", ref))
+		}
+		state.count++
+		if state.count > maxRefExpansions {
+			return nil, compiler.NewError(nil, fmt.Sprintf("exceeded maximum $ref expansions (%d) at %s", maxRefExpansions, ref))
+		}
+		state.seen[ref] = true
+		defer delete(state.seen, ref)
 		info, err := compiler.ReadInfoForRef(root, m.XRef)
 		if err != nil {
 			return nil, err
@@ -1986,7 +2018,7 @@ func (m *Request) ResolveReferences(root string) (*yaml.Node, error) {
 			replacement, err := NewRequest(info, nil)
 			if err == nil {
 				*m = *replacement
-				return m.ResolveReferences(root)
+				return m.resolveReferences(root, state)
 			}
 		}
 		return info, nil
@@ -2028,8 +2060,22 @@ func (m *Resources) ResolveReferences(root string) (*yaml.Node, error) {
 
 // ResolveReferences resolves references found inside Response objects.
 func (m *Response) ResolveReferences(root string) (*yaml.Node, error) {
+	return m.resolveReferences(root, newRefState())
+}
+
+func (m *Response) resolveReferences(root string, state *refState) (*yaml.Node, error) {
 	errors := make([]error, 0)
 	if m.XRef != "" {
+		ref := m.XRef
+		if state.seen[ref] {
+			return nil, compiler.NewError(nil, fmt.Sprintf("circular $ref: %s", ref))
+		}
+		state.count++
+		if state.count > maxRefExpansions {
+			return nil, compiler.NewError(nil, fmt.Sprintf("exceeded maximum $ref expansions (%d) at %s", maxRefExpansions, ref))
+		}
+		state.seen[ref] = true
+		defer delete(state.seen, ref)
 		info, err := compiler.ReadInfoForRef(root, m.XRef)
 		if err != nil {
 			return nil, err
@@ -2047,26 +2093,40 @@ func (m *Resumable) ResolveReferences(root string) (*yaml.Node, error) {
 
 // ResolveReferences resolves references found inside Schema objects.
 func (m *Schema) ResolveReferences(root string) (*yaml.Node, error) {
+	return m.resolveReferences(root, newRefState())
+}
+
+func (m *Schema) resolveReferences(root string, state *refState) (*yaml.Node, error) {
 	errors := make([]error, 0)
 	if m.Properties != nil {
-		_, err := m.Properties.ResolveReferences(root)
+		_, err := m.Properties.resolveReferences(root, state)
 		if err != nil {
 			errors = append(errors, err)
 		}
 	}
 	if m.AdditionalProperties != nil {
-		_, err := m.AdditionalProperties.ResolveReferences(root)
+		_, err := m.AdditionalProperties.resolveReferences(root, state)
 		if err != nil {
 			errors = append(errors, err)
 		}
 	}
 	if m.Items != nil {
-		_, err := m.Items.ResolveReferences(root)
+		_, err := m.Items.resolveReferences(root, state)
 		if err != nil {
 			errors = append(errors, err)
 		}
 	}
 	if m.XRef != "" {
+		ref := m.XRef
+		if state.seen[ref] {
+			return nil, compiler.NewError(nil, fmt.Sprintf("circular $ref: %s", ref))
+		}
+		state.count++
+		if state.count > maxRefExpansions {
+			return nil, compiler.NewError(nil, fmt.Sprintf("exceeded maximum $ref expansions (%d) at %s", maxRefExpansions, ref))
+		}
+		state.seen[ref] = true
+		defer delete(state.seen, ref)
 		info, err := compiler.ReadInfoForRef(root, m.XRef)
 		if err != nil {
 			return nil, err
@@ -2075,7 +2135,7 @@ func (m *Schema) ResolveReferences(root string) (*yaml.Node, error) {
 			replacement, err := NewSchema(info, nil)
 			if err == nil {
 				*m = *replacement
-				return m.ResolveReferences(root)
+				return m.resolveReferences(root, state)
 			}
 		}
 		return info, nil
@@ -2091,10 +2151,14 @@ func (m *Schema) ResolveReferences(root string) (*yaml.Node, error) {
 
 // ResolveReferences resolves references found inside Schemas objects.
 func (m *Schemas) ResolveReferences(root string) (*yaml.Node, error) {
+	return m.resolveReferences(root, newRefState())
+}
+
+func (m *Schemas) resolveReferences(root string, state *refState) (*yaml.Node, error) {
 	errors := make([]error, 0)
 	for _, item := range m.AdditionalProperties {
 		if item != nil {
-			_, err := item.ResolveReferences(root)
+			_, err := item.resolveReferences(root, state)
 			if err != nil {
 				errors = append(errors, err)
 			}
@@ -2861,4 +2925,15 @@ func (m *Simple) ToRawInfo() *yaml.Node {
 // ToRawInfo returns a description of StringArray suitable for JSON or YAML export.
 func (m *StringArray) ToRawInfo() *yaml.Node {
 	return compiler.NewSequenceNodeForStringArray(m.Value)
+}
+
+const maxRefExpansions = 10000
+
+type refState struct {
+	seen  map[string]bool
+	count int
+}
+
+func newRefState() *refState {
+	return &refState{seen: make(map[string]bool)}
 }
